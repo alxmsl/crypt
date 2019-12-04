@@ -37,7 +37,11 @@ func New(machines []string) (*Client, error) {
 }
 
 func (c *Client) Get(k string) ([]byte, error) {
-	snap, err := c.client.Collection(c.collection).Doc(k).Get(context.TODO())
+	return c.GetWithContext(context.TODO(), k)
+}
+
+func (c *Client) GetWithContext(ctx context.Context, k string) ([]byte, error) {
+	snap, err := c.client.Collection(c.collection).Doc(k).Get(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +55,11 @@ func (c *Client) Get(k string) ([]byte, error) {
 }
 
 func (c *Client) List(k string) (backend.KVPairs, error) {
-	snap, err := c.client.Collection(c.collection).Doc(k).Get(context.TODO())
+	return c.ListWithContext(context.TODO(), k)
+}
+
+func (c *Client) ListWithContext(ctx context.Context, k string) (backend.KVPairs, error) {
+	snap, err := c.client.Collection(c.collection).Doc(k).Get(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -68,11 +76,19 @@ func (c *Client) List(k string) (backend.KVPairs, error) {
 }
 
 func (c *Client) Set(k string, v []byte) error {
-	_, err := c.client.Collection(c.collection).Doc(k).Set(context.TODO(), &value{v})
+	return c.SetWithContext(context.TODO(), k, v)
+}
+
+func (c *Client) SetWithContext(ctx context.Context, k string, v []byte) error {
+	_, err := c.client.Collection(c.collection).Doc(k).Set(ctx, &value{v})
 	return err
 }
 
 func (c *Client) Watch(k string, stop chan bool) <-chan *backend.Response {
+	return c.WatchWithContext(context.TODO(), k, stop)
+}
+
+func (c *Client) WatchWithContext(ctx context.Context, k string, stop chan bool) <-chan *backend.Response {
 	ch := make(chan *backend.Response, 0)
 	t := time.NewTicker(time.Second)
 	go func() {

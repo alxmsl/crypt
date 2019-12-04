@@ -15,7 +15,15 @@ type FirebaseSuite struct{}
 var _ = Suite(&FirebaseSuite{})
 
 func (s *FirebaseSuite) TestSplitAddress(c *C) {
-	proj, col := splitEndpoint("project/collection")
+	proj, col := splitEndpoint("project")
+	c.Assert(proj, Equals, "project")
+	c.Assert(col, Equals, "")
+
+	proj, col = splitEndpoint("project/")
+	c.Assert(proj, Equals, "project")
+	c.Assert(col, Equals, "")
+
+	proj, col = splitEndpoint("project/collection")
 	c.Assert(proj, Equals, "project")
 	c.Assert(col, Equals, "collection")
 
