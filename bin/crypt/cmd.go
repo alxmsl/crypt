@@ -11,6 +11,7 @@ import (
 	"github.com/bketelsen/crypt/backend"
 	"github.com/bketelsen/crypt/backend/consul"
 	"github.com/bketelsen/crypt/backend/etcd"
+	"github.com/bketelsen/crypt/backend/firestore"
 	"github.com/bketelsen/crypt/encoding/secconf"
 )
 
@@ -207,10 +208,14 @@ func getBackendStore(provider string, endpoint string) (backend.Store, error) {
 			endpoint = "127.0.0.1:8500"
 		case "etcd":
 			endpoint = "http://127.0.0.1:4001"
+		case "firestore":
+			endpoint = "project/collection"
 		}
 	}
 	machines := []string{endpoint}
 	switch provider {
+	case "firestore":
+		return firestore.New(machines)
 	case "etcd":
 		return etcd.New(machines)
 	case "consul":
