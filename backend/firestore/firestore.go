@@ -3,50 +3,49 @@ package firestore
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	"cloud.google.com/go/firestore"
 	"github.com/bketelsen/crypt/backend"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"
 )
 
 type Client struct {
-	client     *firestore.Client
-	collection string
+	client *firestore.Client
 }
 
-type value struct {
-	Data []byte `firestore:"value"`
+type data struct {
+	Data []byte `firestore:"data"`
 }
 
 func New(machines []string) (*Client, error) {
 	if len(machines) == 0 {
 		return nil, errors.New("project should be defined")
 	}
-	proj, col := splitEndpoint(machines[0])
 
-	opts := []option.ClientOption{}
-	opts = append(opts, option.WithGRPCDialOption(grpc.WithBlock()))
-	c, err := firestore.NewClient(context.TODO(), proj, opts...)
+	opts := []option.ClientOption{
+		option.WithGRPCDialOption(grpc.WithBlock()),
+	}
+	c, err := firestore.NewClient(context.TODO(), machines[0], opts...)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{c, col}, nil
+	return &Client{c}, nil
 }
 
-func (c *Client) Get(k string) ([]byte, error) {
-	return c.GetWithContext(context.TODO(), k)
+func (c *Client) Get(path string) ([]byte, error) {
+	return c.GetWithContext(context.TODO(), path)
 }
 
-func (c *Client) GetWithContext(ctx context.Context, k string) ([]byte, error) {
-	snap, err := c.client.Collection(c.collection).Doc(k).Get(ctx)
+func (c *Client) GetWithContext(ctx context.Context, path string) ([]byte, error) {
+	snap, err := c.client.Doc(path).Get(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	d := &value{}
+	d := &data{}
 	err = snap.DataTo(&d)
 	if err != nil {
 		return nil, err
@@ -54,49 +53,61 @@ func (c *Client) GetWithContext(ctx context.Context, k string) ([]byte, error) {
 	return d.Data, nil
 }
 
-func (c *Client) List(k string) (backend.KVPairs, error) {
-	return c.ListWithContext(context.TODO(), k)
+func (c *Client) List(collection string) (backend.KVPairs, error) {
+	return c.ListWithContext(context.TODO(), collection)
 }
 
-func (c *Client) ListWithContext(ctx context.Context, k string) (backend.KVPairs, error) {
-	snap, err := c.client.Collection(c.collection).Doc(k).Get(ctx)
-	if err != nil {
-		return nil, err
-	}
+func (c *Client) ListWithContext(ctx context.Context, collection string) (backend.KVPairs, error) {
+	res := backend.KVPairs{}
+	it := c.client.Collection(collection).Documents(ctx)
+	for {
+		doc, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
 
-	vv := snap.Data()
-	pp := make(backend.KVPairs, 0, len(vv))
-	for k, v := range vv {
-		pp = append(pp, &backend.KVPair{
-			Key:   k,
-			Value: v.([]byte),
+		d := &data{}
+		err = doc.DataTo(&d)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, &backend.KVPair{
+			Key:   doc.Ref.ID,
+			Value: d.Data,
 		})
 	}
-	return pp, nil
+	return res, nil
 }
 
-func (c *Client) Set(k string, v []byte) error {
-	return c.SetWithContext(context.TODO(), k, v)
+func (c *Client) Set(path string, value []byte) error {
+	return c.SetWithContext(context.TODO(), path, value)
 }
 
-func (c *Client) SetWithContext(ctx context.Context, k string, v []byte) error {
-	_, err := c.client.Collection(c.collection).Doc(k).Set(ctx, &value{v})
+func (c *Client) SetWithContext(ctx context.Context, path string, value []byte) error {
+	_, err := c.client.Doc(path).Set(ctx, &data{value})
 	return err
 }
 
-func (c *Client) Watch(k string, stop chan bool) <-chan *backend.Response {
-	return c.WatchWithContext(context.TODO(), k, stop)
+func (c *Client) Watch(path string, stop chan bool) <-chan *backend.Response {
+	return c.WatchWithContext(context.TODO(), path, stop)
 }
 
-func (c *Client) WatchWithContext(ctx context.Context, k string, stop chan bool) <-chan *backend.Response {
+func (c *Client) WatchWithContext(ctx context.Context, path string, stop chan bool) <-chan *backend.Response {
 	ch := make(chan *backend.Response, 0)
 	t := time.NewTicker(time.Second)
 	go func() {
 		for {
 			select {
 			case <-t.C:
-				v, err := c.Get(k)
-				ch <- &backend.Response{v, err}
+				v := &data{}
+				snap, err := c.client.Doc(path).Get(ctx)
+				if err == nil {
+					err = snap.DataTo(&v)
+				}
+				ch <- &backend.Response{v.Data, err}
 				if err != nil {
 					time.Sleep(time.Second * 5)
 				}
@@ -107,12 +118,4 @@ func (c *Client) WatchWithContext(ctx context.Context, k string, stop chan bool)
 		}
 	}()
 	return ch
-}
-
-func splitEndpoint(e string) (string, string) {
-	idx := strings.Index(e, "/")
-	if idx < 0 {
-		return e, ""
-	}
-	return e[:idx], strings.Trim(e[idx:], "/")
 }
