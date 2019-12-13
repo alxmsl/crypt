@@ -8,10 +8,10 @@ import (
 	"log"
 	"os"
 
-	"github.com/bketelsen/crypt/backend"
-	"github.com/bketelsen/crypt/backend/consul"
-	"github.com/bketelsen/crypt/backend/etcd"
-	"github.com/bketelsen/crypt/encoding/secconf"
+	"github.com/alxmsl/crypt/backend"
+	"github.com/alxmsl/crypt/backend/consul"
+	"github.com/alxmsl/crypt/backend/etcd"
+	"github.com/alxmsl/crypt/encoding/secconf"
 )
 
 func getCmd(flagset *flag.FlagSet) {
